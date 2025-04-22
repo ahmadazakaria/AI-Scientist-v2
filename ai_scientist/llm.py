@@ -47,6 +47,13 @@ AVAILABLE_LLMS = [
     "vertex_ai/claude-3-5-sonnet@20241022",
     "vertex_ai/claude-3-sonnet@20240229",
     "vertex_ai/claude-3-haiku@20240307",
+    "ollama:phi3:mini",
+    "ollama:llama3",
+    "GandalfBaum/llama3.1-claude3.7:latest",
+    "deepseek-r1:latest",
+    "llama3:latest",  
+    "mistral:latest"
+
 ]
 
 
@@ -377,6 +384,21 @@ def extract_json_between_markers(llm_output: str) -> dict | None:
 
     return None  # No valid JSON found
 
+
+
+# --- OLLAMA SUPPORT -----------------------------------------------------
+def _create_ollama_client(model_str: str):
+    """Return (OpenAI-compatible client, pure_model_name) talking to local Ollama.
+    Accepts names like 'ollama:phi3' or plain 'phi3'.
+    Base URL can be overridden with env var OLLAMA_BASE_URL.
+    """
+    import openai
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    client = openai.OpenAI(api_key="ollama", base_url=base_url)
+    if model_str.startswith("ollama:"):
+        return client, model_str.split(":", 1)[1]
+    return client, model_str
+# ------------------------------------------------------------------------
 
 def create_client(model) -> tuple[Any, str]:
     if model.startswith("claude-"):
