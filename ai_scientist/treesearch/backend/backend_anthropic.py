@@ -5,6 +5,9 @@ from .utils import FunctionSpec, OutputType, opt_messages_to_list, backoff_creat
 from funcy import notnone, once, select_values
 import anthropic
 
+if not any(os.environ.get(var) for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"]):
+    raise RuntimeError("Anthropic/Bedrock backend called but AWS credentials are not set. Please use OpenAI or Ollama models.")
+
 # _client: anthropic.Anthropic = None  # type: ignore
 _client: anthropic.AnthropicBedrock = None  # type: ignore
 

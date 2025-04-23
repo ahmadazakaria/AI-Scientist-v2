@@ -85,20 +85,20 @@ def parse_arguments():
     parser.add_argument(
         "--model_agg_plots",
         type=str,
-        default="o3-mini-2025-01-31",
-        help="Model to use for plot aggregation",
+        default="local_model/agg_plots_model",
+        help="Path to the local model for plot aggregation",
     )
     parser.add_argument(
         "--model_writeup",
         type=str,
-        default="o1-preview-2024-09-12",
-        help="Model to use for writeup",
+        default="local_model/writeup_model",
+        help="Path to the local model for writeup",
     )
     parser.add_argument(
         "--model_citation",
         type=str,
-        default="gpt-4o-2024-11-20",
-        help="Model to use for citation gathering",
+        default="local_model/citation_model",
+        help="Path to the local model for citation gathering",
     )
     parser.add_argument(
         "--num_cite_rounds",
@@ -109,8 +109,8 @@ def parse_arguments():
     parser.add_argument(
         "--model_review",
         type=str,
-        default="gpt-4o-2024-11-20",
-        help="Model to use for review main text and captions",
+        default="local_model/review_model",
+        help="Path to the local model for review main text and captions",
     )
     parser.add_argument(
         "--skip_writeup",
@@ -171,6 +171,15 @@ def redirect_stdout_stderr_to_file(log_file_path):
         sys.stdout = original_stdout
         sys.stderr = original_stderr
         log.close()
+
+
+def create_local_client(model_path):
+    """
+    Create a local client for the specified model path.
+    """
+    print(f"Loading local model from {model_path}")
+    # Replace with actual logic to load the local model
+    return None, model_path  # Placeholder for actual client and model
 
 
 if __name__ == "__main__":
@@ -299,7 +308,7 @@ if __name__ == "__main__":
         if os.path.exists(pdf_path):
             print("Paper found at: ", pdf_path)
             paper_content = load_paper(pdf_path)
-            client, client_model = create_client(args.model_review)
+            client, client_model = create_local_client(args.model_review)
             review_text = perform_review(paper_content, client_model, client)
             review_img_cap_ref = perform_imgs_cap_ref_review(
                 client, client_model, pdf_path

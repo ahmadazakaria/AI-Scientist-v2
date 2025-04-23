@@ -1,11 +1,17 @@
+import os
 import json
 import logging
 import time
 
-from .utils import FunctionSpec, OutputType, opt_messages_to_list, backoff_create
+from .utils import (
+    FunctionSpec,
+    OutputType,
+    opt_messages_to_list,
+    backoff_create,
+    compile_prompt_to_md,
+)
 from funcy import notnone, once, select_values
 import openai
-from rich import print
 
 logger = logging.getLogger("ai-scientist")
 
@@ -22,61 +28,83 @@ OPENAI_TIMEOUT_EXCEPTIONS = (
 @once
 def _setup_openai_client():
     global _client
-    _client = openai.OpenAI(max_retries=0)
+    # If you’ve exported OLLAMA_BASE_URL, use Ollama locally:
+    ollama_url = os.getenv("OLLAMA_BASE_URL")
+    if ollama_url:
+        _client = openai.OpenAI(
+            api_key="ollama",
+            base_url=ollama_url,
+            max_retries=0,
+        )
+        logger.info(f"🔗 Routing OpenAI client to Ollama at {ollama_url}")
+    else:
+        # Fallback to cloud
+        _client = openai.OpenAI(max_retries=0)
+        logger.info("🔗 Using official OpenAI API")
 
 
 def query(
     system_message: str | None,
     user_message: str | None,
     func_spec: FunctionSpec | None = None,
+    model: str = None,
     **model_kwargs,
 ) -> tuple[OutputType, float, int, int, dict]:
+    """
+    Query via the OpenAI/Ollama client.
+    Ensures both system_message and user_message are strings.
+    """
     _setup_openai_client()
-    filtered_kwargs: dict = select_values(notnone, model_kwargs)  # type: ignore
 
-    messages = opt_messages_to_list(system_message, user_message)
+    # Ensure system_message and user_message are strings
+    if system_message is not None and not isinstance(system_message, str):
+        system_message = compile_prompt_to_md(system_message)
+    if user_message is not None and not isinstance(user_message, str):
+        user_message = compile_prompt_to_md(user_message)
 
+    # Prepare messages for the API
+    messages = []
+    if system_message:
+        messages.append({"role": "system", "content": system_message})
+    if user_message:
+        messages.append({"role": "user", "content": user_message})
+
+    # Ensure required arguments are passed
+    if not messages or not model:
+        raise TypeError("Missing required arguments; Expected both 'messages' and 'model'.")
+
+    # Handle optional function-calling
     if func_spec is not None:
-        filtered_kwargs["tools"] = [func_spec.as_openai_tool_dict]
-        # force the model to use the function
-        filtered_kwargs["tool_choice"] = func_spec.openai_tool_choice_dict
+        model_kwargs["tools"] = [func_spec.as_openai_tool_dict]
+        model_kwargs["tool_choice"] = func_spec.openai_tool_choice_dict
 
+    # Make the API call
     t0 = time.time()
     completion = backoff_create(
         _client.chat.completions.create,
         OPENAI_TIMEOUT_EXCEPTIONS,
         messages=messages,
-        **filtered_kwargs,
+        model=model,
+        **model_kwargs,
     )
-    req_time = time.time() - t0
+    latency = time.time() - t0
 
+    # Parse the response
     choice = completion.choices[0]
-
     if func_spec is None:
         output = choice.message.content
     else:
-        assert (
-            choice.message.tool_calls
-        ), f"function_call is empty, it is not a function call: {choice.message}"
-        assert (
-            choice.message.tool_calls[0].function.name == func_spec.name
-        ), "Function name mismatch"
         try:
-            print(f"[cyan]Raw func call response: {choice}[/cyan]")
             output = json.loads(choice.message.tool_calls[0].function.arguments)
         except json.JSONDecodeError as e:
             logger.error(
-                f"Error decoding the function arguments: {choice.message.tool_calls[0].function.arguments}"
+                "Failed to decode function arguments: "
+                f"{choice.message.tool_calls[0].function.arguments}"
             )
-            raise e
+            raise
 
-    in_tokens = completion.usage.prompt_tokens
-    out_tokens = completion.usage.completion_tokens
+    in_tok = completion.usage.prompt_tokens
+    out_tok = completion.usage.completion_tokens
+    info = {"model": completion.model, "created": completion.created}
 
-    info = {
-        "system_fingerprint": completion.system_fingerprint,
-        "model": completion.model,
-        "created": completion.created,
-    }
-
-    return output, req_time, in_tokens, out_tokens, info
+    return output, latency, in_tok, out_tok, info

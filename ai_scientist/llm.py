@@ -11,50 +11,70 @@ import openai
 MAX_NUM_TOKENS = 4096
 
 AVAILABLE_LLMS = [
-    "claude-3-5-sonnet-20240620",
-    "claude-3-5-sonnet-20241022",
-    # OpenAI models
-    "gpt-4o-mini",
-    "gpt-4o-mini-2024-07-18",
-    "gpt-4o",
-    "gpt-4o-2024-05-13",
-    "gpt-4o-2024-08-06",
-    "gpt-4.1",
-    "gpt-4.1-2025-04-14",
-    "gpt-4.1-mini",
-    "gpt-4.1-mini-2025-04-14",
-    "o1",
-    "o1-2024-12-17",
-    "o1-preview-2024-09-12",
-    "o1-mini",
-    "o1-mini-2024-09-12",
-    "o3-mini",
-    "o3-mini-2025-01-31",
-    # DeepSeek Models
-    "deepseek-coder-v2-0724",
-    "deepcoder-14b",
-    # Llama 3 models
-    "llama3.1-405b",
-    # Anthropic Claude models via Amazon Bedrock
-    "bedrock/anthropic.claude-3-sonnet-20240229-v1:0",
-    "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",
-    "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0",
-    "bedrock/anthropic.claude-3-haiku-20240307-v1:0",
-    "bedrock/anthropic.claude-3-opus-20240229-v1:0",
-    # Anthropic Claude models Vertex AI
-    "vertex_ai/claude-3-opus@20240229",
-    "vertex_ai/claude-3-5-sonnet@20240620",
-    "vertex_ai/claude-3-5-sonnet@20241022",
-    "vertex_ai/claude-3-sonnet@20240229",
-    "vertex_ai/claude-3-haiku@20240307",
-    "ollama:phi3:mini",
-    "ollama:llama3",
-    "GandalfBaum/llama3.1-claude3.7:latest",
-    "deepseek-r1:latest",
-    "llama3:latest",  
-    "mistral:latest"
-
+	"GandalfBaum/llama3.1-claude3.7:latest",
+"deepseek-r1:latest",
+"llama3:latest",  
+"mistral:latest"
 ]
+
+# AVAILABLE_LLMS = [
+    
+#     "claude-3-5-sonnet-20240620",
+#     "claude-3-5-sonnet-20241022",
+#     # OpenAI models
+#     "gpt-4o-mini",
+#     "gpt-4o-mini-2024-07-18",
+#     "gpt-4o",
+#     "gpt-4o-2024-05-13",
+#     "gpt-4o-2024-08-06",
+#     "gpt-4.1",
+#     "gpt-4.1-2025-04-14",
+#     "gpt-4.1-mini",
+#     "gpt-4.1-mini-2025-04-14",
+#     "o1",
+#     "o1-2024-12-17",
+#     "o1-preview-2024-09-12",
+#     "o1-mini",
+#     "o1-mini-2024-09-12",
+#     "o3-mini",
+#     "o3-mini-2025-01-31",
+#     # DeepSeek Models
+#     "deepseek-coder-v2-0724",
+#     "deepcoder-14b",
+#     # Llama 3 models
+#     "llama3.1-405b",
+#     # Anthropic Claude models via Amazon Bedrock
+#     "bedrock/anthropic.claude-3-sonnet-20240229-v1:0",
+#     "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0",
+#     "bedrock/anthropic.claude-3-5-sonnet-20241022-v2:0",
+#     "bedrock/anthropic.claude-3-haiku-20240307-v1:0",
+#     "bedrock/anthropic.claude-3-opus-20240229-v1:0",
+#     # Anthropic Claude models Vertex AI
+#     "vertex_ai/claude-3-opus@20240229",
+#     "vertex_ai/claude-3-5-sonnet@20240620",
+#     "vertex_ai/claude-3-5-sonnet@20241022",
+#     "vertex_ai/claude-3-sonnet@20240229",
+#     "vertex_ai/claude-3-haiku@20240307",
+#     "ollama:phi3:mini",
+#     "ollama:llama3",
+# 	"GandalfBaum/llama3.1-claude3.7:latest",
+# "deepseek-r1:latest",
+# "llama3:latest",  
+# "mistral:latest"
+# ]
+
+
+def _ensure_string_content(messages):
+    """Convert all message 'content' fields to string if not already."""
+    fixed = []
+    for m in messages:
+        msg = dict(m)
+        if isinstance(msg.get("content"), (dict, list)):
+            msg["content"] = json.dumps(msg["content"])
+        elif msg.get("content") is None:
+            msg["content"] = ""
+        fixed.append(msg)
+    return fixed
 
 
 # Get N responses from a single message, used for ensembling.
@@ -84,12 +104,11 @@ def get_batch_responses_from_llm(
 
     if "gpt" in model:
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
+        messages = [{"role": "system", "content": system_message}, *new_msg_history]
+        messages = _ensure_string_content(messages)
         response = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system_message},
-                *new_msg_history,
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=MAX_NUM_TOKENS,
             n=n_responses,
@@ -165,12 +184,11 @@ def get_batch_responses_from_llm(
 @track_token_usage
 def make_llm_call(client, model, temperature, system_message, prompt):
     if "gpt" in model:
+        messages = [{"role": "system", "content": system_message}, *prompt]
+        messages = _ensure_string_content(messages)
         return client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": system_message},
-                *prompt,
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=MAX_NUM_TOKENS,
             n=1,
@@ -178,12 +196,11 @@ def make_llm_call(client, model, temperature, system_message, prompt):
             seed=0,
         )
     elif "o1" in model or "o3" in model:
+        messages = [{"role": "user", "content": system_message}, *prompt]
+        messages = _ensure_string_content(messages)
         return client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "user", "content": system_message},
-                *prompt,
-            ],
+            messages=messages,
             temperature=1,
             n=1,
             seed=0,
@@ -248,23 +265,30 @@ def get_response_from_llm(
         ]
     elif "gpt" in model:
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
-        response = make_llm_call(
-            client,
-            model,
-            temperature,
-            system_message=system_message,
-            prompt=new_msg_history,
+        messages = [{"role": "system", "content": system_message}, *new_msg_history]
+        messages = _ensure_string_content(messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=MAX_NUM_TOKENS,
+            n=1,
+            stop=None,
+            seed=0,
         )
         content = response.choices[0].message.content
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
     elif "o1" in model or "o3" in model:
         new_msg_history = msg_history + [{"role": "user", "content": msg}]
-        response = make_llm_call(
-            client,
-            model,
-            temperature,
-            system_message=system_message,
-            prompt=new_msg_history,
+        # Fix: ensure all content is string
+        messages = [{"role": "user", "content": system_message}, *new_msg_history]
+        messages = _ensure_string_content(messages)
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=1,
+            n=1,
+            seed=0,
         )
         content = response.choices[0].message.content
         new_msg_history = new_msg_history + [{"role": "assistant", "content": content}]
@@ -388,10 +412,7 @@ def extract_json_between_markers(llm_output: str) -> dict | None:
 
 # --- OLLAMA SUPPORT -----------------------------------------------------
 def _create_ollama_client(model_str: str):
-    """Return (OpenAI-compatible client, pure_model_name) talking to local Ollama.
-    Accepts names like 'ollama:phi3' or plain 'phi3'.
-    Base URL can be overridden with env var OLLAMA_BASE_URL.
-    """
+    """Return (OpenAI-compatible client, pure_model_name) talking to local Ollama."""
     import openai
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
     client = openai.OpenAI(api_key="ollama", base_url=base_url)
@@ -399,54 +420,24 @@ def _create_ollama_client(model_str: str):
         return client, model_str.split(":", 1)[1]
     return client, model_str
 # ------------------------------------------------------------------------
-
 def create_client(model) -> tuple[Any, str]:
-    if model.startswith("claude-"):
-        print(f"Using Anthropic API with model {model}.")
-        return anthropic.Anthropic(), model
-    elif model.startswith("bedrock") and "claude" in model:
-        client_model = model.split("/")[-1]
-        print(f"Using Amazon Bedrock with model {client_model}.")
-        return anthropic.AnthropicBedrock(), client_model
-    elif model.startswith("vertex_ai") and "claude" in model:
-        client_model = model.split("/")[-1]
-        print(f"Using Vertex AI with model {client_model}.")
-        return anthropic.AnthropicVertex(), client_model
-    elif "gpt" in model:
-        print(f"Using OpenAI API with model {model}.")
-        return openai.OpenAI(), model
-    elif "o1" in model or "o3" in model:
-        print(f"Using OpenAI API with model {model}.")
-        return openai.OpenAI(), model
-    elif model == "deepseek-coder-v2-0724":
-        print(f"Using OpenAI API with {model}.")
-        return (
-            openai.OpenAI(
-                api_key=os.environ["DEEPSEEK_API_KEY"],
-                base_url="https://api.deepseek.com",
-            ),
-            model,
-        )
-    elif model == "deepcoder-14b":
-        print(f"Using HuggingFace API with {model}.")
-        # Using OpenAI client with HuggingFace API
-        if "HUGGINGFACE_API_KEY" not in os.environ:
-            raise ValueError("HUGGINGFACE_API_KEY environment variable not set")
-        return (
-            openai.OpenAI(
-                api_key=os.environ["HUGGINGFACE_API_KEY"],
-                base_url="https://api-inference.huggingface.co/models/agentica-org/DeepCoder-14B-Preview",
-            ),
-            model,
-        )
-    elif model == "llama3.1-405b":
-        print(f"Using OpenAI API with {model}.")
-        return (
-            openai.OpenAI(
-                api_key=os.environ["OPENROUTER_API_KEY"],
-                base_url="https://openrouter.ai/api/v1",
-            ),
-            "meta-llama/llama-3.1-405b-instruct",
-        )
-    else:
-        raise ValueError(f"Model {model} not supported.")
+    # Only allow supported models (OpenAI, Ollama, etc.)
+    if model.startswith("claude-") or model.startswith("bedrock") or model.startswith("vertex_ai"):
+        print(f"ERROR: Anthropic Claude/Bedrock/Vertex AI models are not supported. Please use Ollama models.")
+        # Always fallback to preferred local Ollama model
+        return _create_ollama_client("ollama:GandalfBaum/llama3.1-claude3.7:latest")
+    elif model.startswith("ollama:"):
+        return _create_ollama_client(model)
+    elif model in [
+        "GandalfBaum/llama3.1-claude3.7:latest",
+        "llama3:latest",
+        "mistral:latest",
+        "deepseek-r1:latest",
+        "phi3:mini",
+    ]:
+        # Allow bare model names for local models
+        return _create_ollama_client(f"ollama:{model}")
+    # Fallback to preferred local Ollama model
+    print(f"Model {model} not supported or not available, falling back to ollama:GandalfBaum/llama3.1-claude3.7:latest.")
+    return _create_ollama_client("ollama:GandalfBaum/llama3.1-claude3.7:latest")
+

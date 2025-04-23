@@ -1,4 +1,4 @@
-from . import backend_anthropic, backend_openai
+from . import backend_openai
 from .utils import FunctionSpec, OutputType, PromptType, compile_prompt_to_md
 
 
@@ -27,10 +27,15 @@ def query(
         OutputType: A string completion if func_spec is None, otherwise a dict with the function call details.
     """
 
-    model_kwargs = model_kwargs | {
-        "model": model,
-        "temperature": temperature,
-    }
+    # Ensure model is passed
+    if not model:
+        raise ValueError("Model must be specified for the query.")
+
+    # Add temperature and max_tokens to model_kwargs
+    if temperature is not None:
+        model_kwargs["temperature"] = temperature
+    if max_tokens is not None:
+        model_kwargs["max_tokens"] = max_tokens
 
     # Handle models with beta limitations
     # ref: https://platform.openai.com/docs/guides/reasoning/beta-limitations
@@ -52,12 +57,13 @@ def query(
     else:
         model_kwargs["max_tokens"] = max_tokens
 
-    query_func = backend_anthropic.query if "claude-" in model else backend_openai.query
-    output, req_time, in_tok_count, out_tok_count, info = query_func(
-        system_message=compile_prompt_to_md(system_message) if system_message else None,
-        user_message=compile_prompt_to_md(user_message) if user_message else None,
-        func_spec=func_spec,
-        **model_kwargs,
-    )
+    if not model or model.startswith("claude-") or model.startswith("bedrock") or model.startswith("vertex_ai"):
+        model = "ollama:GandalfBaum/llama3.1-claude3.7:latest"
+    model_kwargs["model"] = model
 
-    return output
+    # Remove 'model' from model_kwargs if present to avoid duplicate argument
+    if 'model' in model_kwargs:
+        model_kwargs.pop('model')
+
+    # Pass model as a keyword argument
+    return backend_openai.query(system_message, user_message, func_spec=func_spec, model=model, **model_kwargs)

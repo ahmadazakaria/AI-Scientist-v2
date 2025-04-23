@@ -55,7 +55,13 @@ def journal_to_rich_tree(journal: Journal):
     return tree
 
 
-def perform_experiments_bfts(config_path: str):
+def perform_experiments_bfts(config_path, local_model_path="local_model/experiment_model"):
+    """
+    Perform experiments using the BFTS method with a local model.
+    """
+    print(f"Using local model for experiments: {local_model_path}")
+    # Add logic to load and use the local model
+
     # turn config path string into a path object
     config_path = Path(config_path)
     cfg = load_cfg(config_path)
